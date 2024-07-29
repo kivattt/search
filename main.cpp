@@ -8,8 +8,11 @@
 
 using std::string;
 
+const string version = "v0.0.1";
+
 void usage(string programName) {
 	std::cout << "Usage: " << programName << " [text]\n";
+	std::cout << "search " << version << '\n';
 }
 
 bool should_search_file(const string filename) {
