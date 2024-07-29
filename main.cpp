@@ -10,7 +10,7 @@
 using std::string;
 using std::vector;
 
-const string version = "v0.0.2";
+const string version = "v0.0.3";
 
 void usage(string programName) {
 	std::cout << "Usage: " << programName << " [text]\n";
@@ -36,7 +36,9 @@ const vector<string> nonTextFileExtensions{
 	".tiff",
 	".gif",
 	".webp",
-	".bmp"
+	".bmp",
+
+	".pack"
 };
 
 bool should_search_file(const string filename) {
@@ -81,7 +83,7 @@ int main(int argc, char *argv[]) {
 		for (int lineNum = 1; std::getline(f, line); lineNum++) {
 			int found = line.find(text);
 			if (found != string::npos) {
-				std::cout << entry.path().filename().string() << ":" << lineNum << " ";
+				std::cout << std::filesystem::relative(entry.path(), "./").string() << ":" << lineNum << " ";
 				std::cout << line.substr(0, found);
 				std::cout << YELLOW << line.substr(found, text.length()) << RESET;
 				std::cout << line.substr(found+text.length());
