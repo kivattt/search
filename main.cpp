@@ -1,21 +1,50 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
 #include <filesystem>
 
 #define YELLOW "\x1b[0;33m"
 #define RESET "\x1b[0m"
 
 using std::string;
+using std::vector;
 
-const string version = "v0.0.1";
+const string version = "v0.0.2";
 
 void usage(string programName) {
 	std::cout << "Usage: " << programName << " [text]\n";
 	std::cout << "search " << version << '\n';
 }
 
+bool ends_with(string str, string endsWith) {
+	if (str.length() < endsWith.length())
+		return false;
+
+	if (str.substr(str.length() - endsWith.length()) == endsWith)
+		return true;
+
+	return false;
+}
+
+const vector<string> nonTextFileExtensions{
+	".png",
+	".jpg",
+	".jpeg",
+	".jfif",
+	".flif",
+	".tiff",
+	".gif",
+	".webp",
+	".bmp"
+};
+
 bool should_search_file(const string filename) {
+	for (string extension : nonTextFileExtensions) {
+		if (ends_with(filename, extension))
+			return false;
+	}
+
 	const std::filesystem::perms permissions = std::filesystem::status(filename).permissions();
 
 	if ((std::filesystem::perms::owner_exec & permissions) != std::filesystem::perms::none)
@@ -42,7 +71,7 @@ int main(int argc, char *argv[]) {
 
 	const std::filesystem::path cwd = ".";
 	// TODO: ? recursive_directory_iterator
-	for (const auto &entry : std::filesystem::directory_iterator(cwd)) {
+	for (const auto &entry : std::filesystem::recursive_directory_iterator(cwd)) {
 		if (!should_search_file(entry.path()))
 			continue;
 
