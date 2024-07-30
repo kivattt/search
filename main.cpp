@@ -2,7 +2,12 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <filesystem>
+
+#include "same-inode.h"
 
 #define YELLOW "\x1b[0;33m"
 #define RESET "\x1b[0m"
@@ -10,7 +15,7 @@
 using std::string;
 using std::vector;
 
-const string version = "v0.0.3";
+const string version = "v0.0.4";
 
 void usage(string programName) {
 	std::cout << "Usage: " << programName << " [text]\n";
@@ -71,9 +76,20 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
+	struct stat stdoutStat;
+	fstat(STDOUT_FILENO, &stdoutStat);
+
 	const std::filesystem::path cwd = ".";
 	// TODO: ? recursive_directory_iterator
 	for (const auto &entry : std::filesystem::recursive_directory_iterator(cwd)) {
+		int entryFileDescriptor = open(entry.path().string().c_str(), O_RDONLY);
+		struct stat entryStat;
+		fstat(entryFileDescriptor, &entryStat);
+		if (SAME_INODE(stdoutStat, entryStat)) {
+			std::cerr << "search: " << entry.path().string() << ": input file is also the output\n";
+			continue;
+		}
+
 		if (!should_search_file(entry.path()))
 			continue;
 
