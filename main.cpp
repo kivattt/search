@@ -15,7 +15,7 @@
 using std::string;
 using std::vector;
 
-const string version = "v0.0.4";
+const string version = "v0.0.5";
 
 void usage(string programName) {
 	std::cout << "Usage: " << programName << " [text]\n";
@@ -85,6 +85,8 @@ int main(int argc, char *argv[]) {
 		int entryFileDescriptor = open(entry.path().string().c_str(), O_RDONLY);
 		struct stat entryStat;
 		fstat(entryFileDescriptor, &entryStat);
+		close(entryFileDescriptor);
+
 		if (SAME_INODE(stdoutStat, entryStat)) {
 			std::cerr << "search: " << entry.path().string() << ": input file is also the output\n";
 			continue;
