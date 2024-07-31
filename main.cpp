@@ -3,14 +3,19 @@
 #include <string>
 #include <vector>
 #include <unistd.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <filesystem>
 
-#include "same-inode.h"
+#include "same-inode.hpp"
 
 #define YELLOW "\x1b[0;33m"
 #define RESET "\x1b[0m"
+
+#define BUF_SIZE 256
 
 using std::string;
 using std::vector;
@@ -22,14 +27,9 @@ void usage(string programName) {
 	std::cout << "search " << version << '\n';
 }
 
-bool ends_with(string str, string endsWith) {
-	if (str.length() < endsWith.length())
-		return false;
-
-	if (str.substr(str.length() - endsWith.length()) == endsWith)
-		return true;
-
-	return false;
+void panic(const string msg) {
+	std::cerr << msg << '\n';
+	exit(1);
 }
 
 const vector<string> nonTextFileExtensions{
@@ -47,8 +47,11 @@ const vector<string> nonTextFileExtensions{
 };
 
 bool should_search_file(const string filename) {
+	if (filename.starts_with("./.git"))
+		return false;
+
 	for (string extension : nonTextFileExtensions) {
-		if (ends_with(filename, extension))
+		if (filename.ends_with(extension))
 			return false;
 	}
 
@@ -70,11 +73,12 @@ int main(int argc, char *argv[]) {
 		return 0;
 	}
 
-	string text = argv[1];
-	if (text.empty()) {
+	char *searchText = argv[1];
+	if (strlen(searchText) == 0) {
 		usage(argv[0]);
 		return 0;
 	}
+
 
 	struct stat stdoutStat;
 	fstat(STDOUT_FILENO, &stdoutStat);
@@ -83,30 +87,84 @@ int main(int argc, char *argv[]) {
 	// TODO: ? recursive_directory_iterator
 	for (const auto &entry : std::filesystem::recursive_directory_iterator(cwd)) {
 		int entryFileDescriptor = open(entry.path().string().c_str(), O_RDONLY);
+		if (entryFileDescriptor == -1) {
+			std::cerr << "search: " << std::filesystem::relative(entry.path(), "./") << ": Failed to open\n";
+			close(entryFileDescriptor);
+			continue;
+		}
 		struct stat entryStat;
 		fstat(entryFileDescriptor, &entryStat);
-		close(entryFileDescriptor);
+
+		// Empty file, skip
+		if (entryStat.st_size == 0) {
+			close(entryFileDescriptor);
+			continue;
+		}
 
 		if (SAME_INODE(stdoutStat, entryStat)) {
-			std::cerr << "search: " << entry.path().string() << ": input file is also the output\n";
+			std::cerr << "search: " << std::filesystem::relative(entry.path(), "./") << ": input file is also the output\n";
+			close(entryFileDescriptor);
 			continue;
 		}
 
-		if (!should_search_file(entry.path()))
+		if (!should_search_file(entry.path())) {
+			close(entryFileDescriptor);
 			continue;
+		}
 
-		std::ifstream f(entry.path());
+		char *map = static_cast<char*>(mmap(0, entryStat.st_size, PROT_READ, MAP_SHARED, entryFileDescriptor, 0));
+		if (map == MAP_FAILED) {
+			std::cerr << "map failed!\n";
+			close(entryFileDescriptor);
+			return 1;
+		}
 
-		string line;
-		for (int lineNum = 1; std::getline(f, line); lineNum++) {
-			int found = line.find(text);
-			if (found != string::npos) {
-				std::cout << std::filesystem::relative(entry.path(), "./").string() << ":" << lineNum << " ";
-				std::cout << line.substr(0, found);
-				std::cout << YELLOW << line.substr(found, text.length()) << RESET;
-				std::cout << line.substr(found+text.length());
-				std::cout << '\n';
+		int lineNumber = 1;
+		int lastNewLineIndex = 0;
+		int nMatched = 0;
+		for (int i = 0; i < entryStat.st_size; i++) {
+			const char c = map[i];
+
+			if (c == '\n') {
+				lastNewLineIndex = i;
+				++lineNumber;
+				nMatched = 0;
+				continue;
+			}
+
+			if (c == searchText[nMatched]) {
+				++nMatched;
+				if (nMatched == strlen(searchText)) {
+					int nextNewLineIndex = 0;
+					for (int j = i;; j++) {
+						if (map[j] == '\n') {
+							nextNewLineIndex = j;
+							break;
+						}
+					}
+
+					std::cout << std::filesystem::relative(entry.path(), "./").string() << ":" << lineNumber << " ";
+					int hhh = lastNewLineIndex > 0;
+					std::cout << string(map + lastNewLineIndex + hhh, map + i - strlen(searchText) + 1) << RESET;
+					std::cout << YELLOW << string(map + i - strlen(searchText) + 1, map + i + 1) << RESET;
+					std::cout << string(map + i + 1, map + nextNewLineIndex);
+					std::cout << '\n';
+
+					nMatched = 0;
+					lastNewLineIndex = nextNewLineIndex;
+					++lineNumber;
+					i = nextNewLineIndex + 1;
+				}
+			} else {
+				nMatched = 0;
 			}
 		}
+
+		if (munmap(map, entryStat.st_size) == -1) {
+			std::cerr << "Failed to munmap\n";
+			close(entryFileDescriptor);
+			return 1;
+		}
+		close(entryFileDescriptor);
 	}
 }

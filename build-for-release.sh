@@ -6,4 +6,4 @@ if [ ! -d $bin ]; then
 fi
 
 g++ -std=c++23 -O2 -static main.cpp -o $bin/search-linux-amd64
-g++ -std=c++23 -O2 -g -static main.cpp -o $bin/search-linux-amd64-debug-symbols
+g++ -std=c++23 -O0 -g -static main.cpp -o $bin/search-linux-amd64-debug-symbols
