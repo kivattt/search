@@ -20,7 +20,7 @@
 using std::string;
 using std::vector;
 
-const string version = "v0.0.5";
+const string version = "v0.0.6";
 
 void usage(string programName) {
 	std::cout << "Usage: " << programName << " [text]\n";
